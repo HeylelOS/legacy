@@ -15,18 +15,12 @@
 #define CSI_ED     CSI"J"  /* Erase in Display */
 
 struct getty_args {
-	char *username;
+	char *logname;
 	char *path;
 	char *tty;
 	speed_t ispeed;
 	speed_t ospeed;
 };
-
-static void
-getty_usage(const char *gettyname) {
-	fprintf(stderr, "usage: %s [-i speed] [-o speed] [-u username] [-p path] [tty]\n", gettyname);
-	exit(1);
-}
 
 static const struct baud_rate {
 	speed_t speed;
@@ -49,82 +43,6 @@ static const struct baud_rate {
 	{ B19200, 19200 },
 	{ B38400, 38400 },
 };
-
-static int
-getty_speed(const char *speedstr, speed_t *speedp) {
-	char *speedstrend;
-	unsigned long lspeed = strtoul(speedstr, &speedstrend, 10);
-
-	if(*speedstrend == '\0' && speedstrend != speedstr) {
-		const struct baud_rate *current = baudrates,
-			* const baudratesend = baudrates + sizeof(baudrates) + sizeof(*baudrates);
-
-		while(current != baudratesend
-			&& current->lspeed < lspeed) {
-			current++;
-		}
-
-		if(current != baudratesend
-			&& current->lspeed == lspeed) {
-			*speedp = current->speed;
-			return 0;
-		}
-	}
-
-	return -1;
-}
-
-const struct getty_args
-getty_parse_args(int argc, char **argv) {
-	struct getty_args args = {
-		.username = NULL,
-		.path = "/bin/login",
-		.tty = "tty",
-		.ispeed = 0,
-		.ospeed = 0
-	};
-	int c;
-
-	while((c = getopt(argc, argv, ":i:o:u:p:")) != -1) {
-		switch(c) {
-		case 'i':
-			if(getty_speed(optarg, &args.ispeed) != 0) {
-				errx(1, "Unable to parse input speed %s", optarg);
-			}
-			break;
-		case 'o':
-			if(getty_speed(optarg, &args.ospeed) != 0) {
-				errx(1, "Unable to parse output speed %s", optarg);
-			}
-			break;
-		case 'u':
-			args.username = optarg;
-			break;
-		case 'p':
-			args.path = optarg;
-			break;
-		case ':':
-			warnx("-%c: Missing argument", optopt);
-			getty_usage(*argv);
-		default:
-			warnx("Unknown argument -%c", c);
-			getty_usage(*argv);
-		}
-	}
-
-	switch(argc - optind) {
-	case 2:
-		args.path = argv[optind + 1];
-	case 1:
-		args.tty = argv[optind];
-	case 0:
-		break;
-	default:
-		getty_usage(*argv);
-	}
-
-	return args;
-}
 
 void
 getty_open(const struct getty_args *args) {
@@ -221,10 +139,10 @@ getty_execv(const struct getty_args *args) {
 		programname++;
 	}
 
-	if(args->username != NULL) {
+	if(args->logname != NULL) {
 		argv = alloca(sizeof(*argv) * 3);
 		argv[0] = programname;
-		argv[1] = args->username;
+		argv[1] = args->logname;
 		argv[2] = NULL;
 	} else {
 		argv = alloca(sizeof(*argv) * 2);
@@ -234,6 +152,88 @@ getty_execv(const struct getty_args *args) {
 
 	execv(args->path, argv);
 	err(1, "execv %s", args->path);
+}
+
+static void
+getty_usage(const char *gettyname) {
+	fprintf(stderr, "usage: %s [-i speed] [-o speed] [-u logname] [-p path] [tty]\n", gettyname);
+	exit(1);
+}
+
+static int
+getty_speed(const char *speedstr, speed_t *speedp) {
+	char *speedstrend;
+	unsigned long lspeed = strtoul(speedstr, &speedstrend, 10);
+
+	if(*speedstrend == '\0' && speedstrend != speedstr) {
+		const struct baud_rate *current = baudrates,
+			* const baudratesend = baudrates + sizeof(baudrates) + sizeof(*baudrates);
+
+		while(current != baudratesend
+			&& current->lspeed < lspeed) {
+			current++;
+		}
+
+		if(current != baudratesend
+			&& current->lspeed == lspeed) {
+			*speedp = current->speed;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
+const struct getty_args
+getty_parse_args(int argc, char **argv) {
+	struct getty_args args = {
+		.logname = NULL,
+		.path = "/bin/login",
+		.tty = "tty",
+		.ispeed = 0,
+		.ospeed = 0
+	};
+	int c;
+
+	while((c = getopt(argc, argv, ":i:o:u:p:")) != -1) {
+		switch(c) {
+		case 'i':
+			if(getty_speed(optarg, &args.ispeed) != 0) {
+				errx(1, "Unable to parse input speed %s", optarg);
+			}
+			break;
+		case 'o':
+			if(getty_speed(optarg, &args.ospeed) != 0) {
+				errx(1, "Unable to parse output speed %s", optarg);
+			}
+			break;
+		case 'u':
+			args.logname = optarg;
+			break;
+		case 'p':
+			args.path = optarg;
+			break;
+		case ':':
+			warnx("-%c: Missing argument", optopt);
+			getty_usage(*argv);
+		default:
+			warnx("Unknown argument -%c", c);
+			getty_usage(*argv);
+		}
+	}
+
+	switch(argc - optind) {
+	case 2:
+		args.path = argv[optind + 1];
+	case 1:
+		args.tty = argv[optind];
+	case 0:
+		break;
+	default:
+		getty_usage(*argv);
+	}
+
+	return args;
 }
 
 int
